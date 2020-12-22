@@ -58,7 +58,7 @@ func runCheckModel() {
 	prob := logit.MustSigmoid(true)
 	fmt.Printf("%4.1f", prob)
 
-	threshold := 0.15
+	threshold := 0.1
 	// out1 := out.MustExp(true).MustGt(ts.FloatScalar(0.2), true).MustSqueeze1(0, true)
 	pred := prob.MustGt(ts.FloatScalar(threshold), true)
 	predPixels := pred.MustMul1(ts.FloatScalar(255.0), true)

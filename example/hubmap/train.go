@@ -119,11 +119,11 @@ func runTrain() {
 		log.Fatal(err)
 	}
 
-	var si *SI
-	si = CPUInfo()
-	fmt.Printf("Total RAM (MB):\t %8.2f\n", float64(si.TotalRam)/1024)
-	fmt.Printf("Used RAM (MB):\t %8.2f\n", float64(si.TotalRam-si.FreeRam)/1024)
-	startRAM := si.TotalRam - si.FreeRam
+	// var si *SI
+	// si = CPUInfo()
+	// fmt.Printf("Total RAM (MB):\t %8.2f\n", float64(si.TotalRam)/1024)
+	// fmt.Printf("Used RAM (MB):\t %8.2f\n", float64(si.TotalRam-si.FreeRam)/1024)
+	// startRAM := si.TotalRam - si.FreeRam
 
 	// Epochs
 	for e := 0; e < Epochs; e++ {
@@ -187,8 +187,8 @@ func runTrain() {
 			pred := logit.MustTotype(gotch.Double, true)
 			target := maskTs.MustTo(Device, true)
 
-			// loss := criterionBinaryCrossEntropy(pred, target)
-			loss := LossFunc(pred, target)
+			loss := criterionBinaryCrossEntropy(pred, target)
+			// loss := LossFunc(pred, target)
 			pred.MustDrop()
 			target.MustDrop()
 
@@ -198,13 +198,12 @@ func runTrain() {
 			losses = append(losses, lossVal)
 			loss.MustDrop()
 
-			if Device == gotch.CPU {
-				si = CPUInfo()
-				fmt.Printf("Batch %03d\t Loss: %6.4f\tUsed: [%8.2f MiB]\n", count, lossVal, (float64(si.TotalRam-si.FreeRam)-float64(startRAM))/1024)
-			} else {
-				fmt.Printf("Batch %03d\t Loss: %6.4f\n", count, lossVal)
-			}
-
+			// if Device == gotch.CPU {
+			// si = CPUInfo()
+			// fmt.Printf("Batch %03d\t Loss: %6.4f\tUsed: [%8.2f MiB]\n", count, lossVal, (float64(si.TotalRam-si.FreeRam)-float64(startRAM))/1024)
+			// } else {
+			// fmt.Printf("Batch %03d\t Loss: %6.4f\n", count, lossVal)
+			// }
 		}
 
 		var tloss float64
@@ -291,7 +290,8 @@ func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64
 
 		ts.NoGrad(func() {
 			mask := maskTs.MustTo(device, true)
-			logit := net.ForwardT(imgTs.MustTo(device, true), true).MustTotype(gotch.Double, true)
+			img := imgTs.MustTo(device, true)
+			logit := net.ForwardT(img, false).MustTotype(gotch.Double, true)
 
 			// loss
 			// loss := criterionBinaryCrossEntropy(logit, mask)
@@ -311,8 +311,8 @@ func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64
 			tpVals = append(tpVals, tp)
 			tnVals = append(tnVals, tn)
 
-			imgTs.MustDrop()
 			mask.MustDrop()
+			img.MustDrop()
 			logit.MustDrop()
 			loss.MustDrop()
 			prob.MustDrop()

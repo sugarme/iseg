@@ -36,13 +36,11 @@ func (d *DecoderLayer) ForwardSkip(x, skip *ts.Tensor, train bool) *ts.Tensor {
 	if skip != nil {
 		cat = ts.MustCat([]ts.Tensor{*x, *skip}, 1)
 	} else {
-		cat = x
+		// cat = x.MustDetach(false)
+		cat = ts.MustCat([]ts.Tensor{*x}, 1)
 	}
 	attn1 = d.Attn1.ForwardT(cat, train)
-	if skip != nil {
-		cat.MustDrop()
-	}
-
+	cat.MustDrop()
 	conv1 := d.Conv1.ForwardT(attn1, train)
 	attn1.MustDrop()
 	conv2 := d.Conv2.ForwardT(conv1, train)
@@ -106,45 +104,6 @@ type UNetDecoder struct {
 	logit   ts.ModuleT
 }
 
-func concat(x1, x2 *ts.Tensor) *ts.Tensor {
-	return ts.MustCat([]ts.Tensor{*x1, *x2}, 1)
-}
-
-// Forward forwards through input features.
-func (n *UNetDecoder) ForwardFeatures(features []*ts.Tensor, train bool) *ts.Tensor {
-	if len(features) != 6 {
-		log.Fatalf("Expected features of 6 tensors. Got %v\n", len(features))
-	}
-
-	// features[5]: [bz 512 H W] (bz 512 8 8)
-	center := n.center.ForwardT(features[5], train) // [bz 512 H W] (bz 512 8 8)
-	// fmt.Printf("center: %v - feature4: %v - upsample: %v\n", center.MustSize(), features[4].MustSize(), upsample(center, features[4]).MustSize())
-	// features[4]: [bz 256 H W] (bz 256 16 16)
-	skip0 := upsample(center, features[4])
-	z0 := n.decode0.ForwardSkip(features[4], skip0, train)
-	skip1 := upsample(z0, features[3])
-	z1 := n.decode1.ForwardSkip(features[3], skip1, train)
-	skip2 := upsample(z1, features[2])
-	z2 := n.decode2.ForwardSkip(features[2], skip2, train)
-	skip3 := upsample(z2, features[1])
-	z3 := n.decode3.ForwardSkip(features[1], skip3, train)
-	z4 := n.decode4.ForwardSkip(upsample(z3, features[0]), nil, train) // features[0] is same size.
-	logit := n.logit.ForwardT(z4, train)
-
-	center.MustDrop()
-	z0.MustDrop()
-	z1.MustDrop()
-	z2.MustDrop()
-	z3.MustDrop()
-	z4.MustDrop()
-	skip0.MustDrop()
-	skip1.MustDrop()
-	skip2.MustDrop()
-	skip3.MustDrop()
-
-	return logit
-}
-
 // NewUNetDecoder creates UNetDecoder.
 func NewUNetDecoder(p *nn.Path) *UNetDecoder {
 	center := base.Conv2dRelu(p.Sub("center"), 512, 512, 11, 5, 1)
@@ -164,4 +123,39 @@ func NewUNetDecoder(p *nn.Path) *UNetDecoder {
 		decode4: decode4,
 		logit:   logit,
 	}
+}
+
+// Forward forwards through input features.
+func (n *UNetDecoder) ForwardFeatures(features []*ts.Tensor, train bool) *ts.Tensor {
+	if len(features) != 6 {
+		log.Fatalf("Expected features of 6 tensors. Got %v\n", len(features))
+	}
+
+	// feat5: [bz 512 8 8]
+	center := n.center.ForwardT(features[5], train)        // center [bz 512 8 8]
+	skip0 := upsample(center, features[4])                 // feat4  [bz 256 16 16]
+	z0 := n.decode0.ForwardSkip(features[4], skip0, train) // z0     [bz 256 16 16]
+	skip1 := upsample(z0, features[3])                     // feat3  [bz 128 32 32]
+	z1 := n.decode1.ForwardSkip(features[3], skip1, train) // z1     [bz 128 32 32]
+	skip2 := upsample(z1, features[2])                     // feat2  [bz 64 64 64]
+	z2 := n.decode2.ForwardSkip(features[2], skip2, train) // z2     [bz 64 64 64]
+	skip3 := upsample(z2, features[1])                     // feat1  [bz 64 64 64]
+	z3 := n.decode3.ForwardSkip(features[1], skip3, train) // z3     [bz 32 64 64]
+	skip4 := upsample(z3, features[0])                     // feat0  [bz 3 256 256]
+	z4 := n.decode4.ForwardSkip(skip4, nil, train)         // z4     [bz 16 256 256]
+	logit := n.logit.ForwardT(z4, train)                   // logit  [bz 16 256 256]
+
+	center.MustDrop()
+	z0.MustDrop()
+	z1.MustDrop()
+	z2.MustDrop()
+	z3.MustDrop()
+	z4.MustDrop()
+	skip0.MustDrop()
+	skip1.MustDrop()
+	skip2.MustDrop()
+	skip3.MustDrop()
+	skip4.MustDrop()
+
+	return logit
 }

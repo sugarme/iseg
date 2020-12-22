@@ -59,6 +59,9 @@ func checkModel() {
 	image := ts.MustRand([]int64{batchSize, 3, imageSize, imageSize}, gotch.Float, gotch.CPU)
 	for i := 0; i < 100; i++ {
 		ts.NoGrad(func() {
+			var si *SI
+			si = CPUInfo()
+			startRAM := si.TotalRam - si.FreeRam
 			logit := net.ForwardT(image, false)
 			// loss := criterionBinaryCrossEntropy(logit, mask)
 			// fmt.Printf("mask: %v\n", mask.MustSize())
@@ -68,8 +71,9 @@ func checkModel() {
 			// fmt.Printf("%02d - Loss: %v\n", i, l)
 
 			logit.MustDrop()
-			fmt.Printf("Done %02d\n", i)
 			// loss.MustDrop()
+			si = CPUInfo()
+			fmt.Printf("%02d\tUsed RAM (MB):\t %8.2f\n", i, (float64(si.TotalRam-si.FreeRam)-float64(startRAM))/1024)
 		})
 	}
 }
