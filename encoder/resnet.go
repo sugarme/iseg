@@ -5,44 +5,55 @@ import (
 
 	"github.com/sugarme/gotch/nn"
 	ts "github.com/sugarme/gotch/tensor"
-
-	"github.com/sugarme/iseg/base"
 )
 
 type ResNetEncoder struct {
-	identity *base.Identity
-	layer0   ts.ModuleT
-	layer1   ts.ModuleT
-	layer2   ts.ModuleT
-	layer3   ts.ModuleT
-	layer4   ts.ModuleT
+	layer0 ts.ModuleT
+	layer1 ts.ModuleT
+	layer2 ts.ModuleT
+	layer3 ts.ModuleT
+	layer4 ts.ModuleT
 }
 
 // ForwardAll implements Encoder interface for ResNetEncoder
 func (e *ResNetEncoder) ForwardAll(x *ts.Tensor, train bool) []*ts.Tensor {
-	i := e.identity.Forward(x)
-	l0 := e.layer0.ForwardT(i, train)
-	l1 := e.layer1.ForwardT(l0, train)
-	l2 := e.layer2.ForwardT(l1, train)
-	l3 := e.layer3.ForwardT(l2, train)
-	l4 := e.layer4.ForwardT(l3, train)
+	xn := rgbNormalize(x)
+	x0 := e.layer0.ForwardT(xn, train)
+	x1 := e.layer1.ForwardT(x0, train)
+	x2 := e.layer2.ForwardT(x1, train)
+	x3 := e.layer3.ForwardT(x2, train)
+	x4 := e.layer4.ForwardT(x3, train)
 
-	return []*ts.Tensor{i, l0, l1, l2, l3, l4}
+	return []*ts.Tensor{xn, x0, x1, x2, x3, x4}
 }
 
 func NewResNet34Encoder(p *nn.Path) *ResNetEncoder {
 	return &ResNetEncoder{
-		identity: &base.Identity{},
-		layer0:   layerZero(p), // NOTE. `conv1` and `bn1` are at root of pretrained model
-		layer1:   basicLayer(p.Sub("layer1"), 64, 64, 1, 3),
-		layer2:   basicLayer(p.Sub("layer2"), 64, 128, 2, 4),
-		layer3:   basicLayer(p.Sub("layer3"), 128, 256, 2, 6),
-		layer4:   basicLayer(p.Sub("layer4"), 256, 512, 2, 3),
+		layer0: layerZero(p), // NOTE. `conv1` and `bn1` are at root of pretrained model
+		layer1: basicLayer(p.Sub("layer1"), 64, 64, 1, 3),
+		layer2: basicLayer(p.Sub("layer2"), 64, 128, 2, 4),
+		layer3: basicLayer(p.Sub("layer3"), 128, 256, 2, 6),
+		layer4: basicLayer(p.Sub("layer4"), 256, 512, 2, 3),
 	}
 }
 
+func rgbNormalize(x *ts.Tensor) *ts.Tensor {
+	meanVals := []float32{0.485, 0.456, 0.406} // image RGB mean
+	sdVals := []float32{0.229, 0.224, 0.225}   // image RGB standard error
+
+	mean := ts.MustOfSlice(meanVals).MustView([]int64{1, 3, 1, 1}, true)
+	sd := ts.MustOfSlice(sdVals).MustView([]int64{1, 3, 1, 1}, true)
+
+	// x = (x - mean)/sd
+	n := x.MustSub(mean, false).MustDiv(sd, true)
+	mean.MustDrop()
+	sd.MustDrop()
+
+	return n
+}
+
 func layerZero(p *nn.Path) ts.ModuleT {
-	conv1 := conv2d(p.Sub("conv1"), 3, 64, 7, 3, 2)
+	conv1 := conv2dNoBias(p.Sub("conv1"), 3, 64, 7, 3, 2)
 	bn1 := nn.BatchNorm2D(p.Sub("bn1"), 64, nn.DefaultBatchNormConfig())
 	layer0 := nn.SeqT()
 	layer0.Add(conv1)
@@ -87,7 +98,7 @@ func conv2dNoBias(p *nn.Path, cIn, cOut, ksize, padding, stride int64) *nn.Conv2
 func downSample(path *nn.Path, cIn, cOut, stride int64) ts.ModuleT {
 	if stride != 1 || cIn != cOut {
 		seq := nn.SeqT()
-		seq.Add(conv2d(path.Sub("0"), cIn, cOut, 1, 0, stride))
+		seq.Add(conv2dNoBias(path.Sub("0"), cIn, cOut, 1, 0, stride))
 		seq.Add(nn.BatchNorm2D(path.Sub("1"), cOut, nn.DefaultBatchNormConfig()))
 
 		return seq
@@ -104,9 +115,9 @@ type BasicBlock struct {
 }
 
 func NewBasicBlock(path *nn.Path, cIn, cOut, stride int64) *BasicBlock {
-	conv1 := conv2d(path.Sub("conv1"), cIn, cOut, 3, 1, stride)
+	conv1 := conv2dNoBias(path.Sub("conv1"), cIn, cOut, 3, 1, stride)
 	bn1 := nn.BatchNorm2D(path.Sub("bn1"), cOut, nn.DefaultBatchNormConfig())
-	conv2 := conv2d(path.Sub("conv2"), cOut, cOut, 3, 1, 1)
+	conv2 := conv2dNoBias(path.Sub("conv2"), cOut, cOut, 3, 1, 1)
 	bn2 := nn.BatchNorm2D(path.Sub("bn2"), cOut, nn.DefaultBatchNormConfig())
 	downsample := downSample(path.Sub("downsample"), cIn, cOut, stride)
 

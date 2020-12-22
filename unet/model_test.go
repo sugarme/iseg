@@ -14,7 +14,6 @@ import (
 func TestNewUNet(t *testing.T) {
 	device := gotch.CPU
 	vs := nn.NewVarStore(device)
-
 	net := unet.DefaultUNet(vs.Root())
 
 	// Pytorch equivalent to `np.random.choice()`

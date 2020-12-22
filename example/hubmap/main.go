@@ -17,6 +17,7 @@ var (
 	Cuda      bool
 	task      string
 	Device    gotch.Device
+	ModelFrom string
 )
 
 // hyperparameters
@@ -32,14 +33,15 @@ var (
 func init() {
 	flag.StringVar(&DataPath, "input", "./input", "specify input data directory")
 	flag.StringVar(&ModelPath, "model", "./model/resnet34.ot", "specify full path to model weight '.ot' file.")
+	flag.StringVar(&ModelFrom, "from", "scratch", "specify whether training from scratch('scratch') or checkpoint('checkpoint').")
 	flag.BoolVar(&Cuda, "cuda", false, "specify whether using CUDA or not.")
 	flag.StringVar(&task, "task", "train", "specify task to run.")
 	flag.Float64Var(&LR, "lr", 0.001, "specify learning rate.")
 	flag.IntVar(&Reduction, "reduction", 4, "specify image resolution reduction times.")
-	flag.IntVar(&BatchSize, "batch", 16, "specify batch size.")
+	flag.IntVar(&BatchSize, "batch", 32, "specify batch size.")
 	flag.IntVar(&ValidateSize, "validate", 10, "specify size of validation cycles.")
 	flag.IntVar(&TileSize, "tile", 256, "specify tile image size.")
-	flag.StringVar(&OptStr, "opt", "SGD", "specify optimizer type.")
+	flag.StringVar(&OptStr, "opt", "Adam", "specify optimizer type.")
 	flag.IntVar(&Epochs, "epoch", 5, "specify number of epochs.")
 }
 

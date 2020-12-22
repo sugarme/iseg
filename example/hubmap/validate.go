@@ -18,24 +18,34 @@ func loadModel(file string, vs *nn.VarStore) ts.ModuleT {
 	}
 
 	net := unet.DefaultUNet(vs.Root())
-	_, err = vs.LoadPartial(modelPath)
+	if file == "./model/resnet34.ot" {
+		_, err = vs.LoadPartial(modelPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return net
+	}
+
+	err = vs.Load(modelPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	return net
+
 }
 
 func runValidate() {
 	vs := nn.NewVarStore(Device)
-	net := loadModel("./model/hubmap-epoch4.gt", vs)
-	doValidate(net, Device)
+	net := loadModel(ModelPath, vs)
+	loss, dice, tp, tn := doValidate(net, Device)
+	fmt.Printf("Loss: %6.4f\t Dice: %6.4f\t TP: %6.4f\t TN: %6.4f\n", loss, dice, tp, tn)
 }
 
 func runCheckModel() {
 	vs := nn.NewVarStore(Device)
-	net := loadModel("./checkpoint/hubmap.gt", vs)
-	image := "./input/tile/image/0486052bb_190.png"
+	// net := loadModel("./checkpoint/hubmap.gt", vs)
+	net := loadModel(ModelPath, vs)
+	image := "./input/tile/image/2f6ecfcdf_014.png"
 
 	imgTs, err := vision.Load(image)
 	if err != nil {
@@ -44,15 +54,18 @@ func runCheckModel() {
 
 	x := imgTs.MustDiv1(ts.FloatScalar(255.0), true)
 	input := x.MustUnsqueeze(0, true)
-	out := net.ForwardT(input, false)
+	logit := net.ForwardT(input, false)
+	prob := logit.MustSigmoid(true)
+	fmt.Printf("%4.1f", prob)
 
-	fmt.Printf("%v", out)
+	threshold := 0.15
+	// out1 := out.MustExp(true).MustGt(ts.FloatScalar(0.2), true).MustSqueeze1(0, true)
+	pred := prob.MustGt(ts.FloatScalar(threshold), true)
+	predPixels := pred.MustMul1(ts.FloatScalar(255.0), true)
+	// fmt.Printf("%v", predPixels)
 
-	mask := out.MustSqueeze1(0, true)
-
-	fmt.Printf("mask shape: %v\n", mask.MustSize())
-
-	err = vision.Save(mask, "./test.png")
+	// fmt.Printf("mask shape: %v\n", mask.MustSize())
+	err = vision.Save(predPixels, "./test.png")
 	if err != nil {
 		log.Fatal(err)
 	}

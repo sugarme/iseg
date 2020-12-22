@@ -64,18 +64,18 @@ func NewSCSE(p *nn.Path, cIn int64, reductionOpt ...int64) *SCSE {
 	chanSeq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
 		return xs.MustAdaptiveAvgPool2d([]int64{1, 1}, false)
 	}))
-	chanSeq.Add(Conv2d(p, cIn, cIn/reduction, 1, 0, 1))
+	chanSeq.Add(Conv2d(p.Sub("sqzconv1"), cIn, cIn/reduction, 1, 0, 1))
 	chanSeq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
 		return xs.MustRelu(false)
 	}))
-	chanSeq.Add(Conv2d(p, cIn/reduction, cIn, 1, 0, 1))
+	chanSeq.Add(Conv2d(p.Sub("sqzconv2"), cIn/reduction, cIn, 1, 0, 1))
 	chanSeq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
 		return xs.MustSigmoid(false)
 	}))
 
 	// Spatial squeeze excite
 	spatSeq := nn.SeqT()
-	spatSeq.Add(Conv2d(p, cIn, 1, 1, 0, 1))
+	spatSeq.Add(Conv2d(p.Sub("spatconv"), cIn, 1, 1, 0, 1))
 	chanSeq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
 		return xs.MustSigmoid(false)
 	}))
@@ -134,8 +134,8 @@ func Conv2dRelu(p *nn.Path, cIn, cOut, ksize, padding, stride int64) *nn.Sequent
 	bnConfig := nn.DefaultBatchNormConfig()
 	bnConfig.Eps = 0.001
 	seq := nn.SeqT()
-	seq.Add(Conv2dNoBias(p, cIn, cOut, ksize, padding, stride))
-	seq.Add(nn.BatchNorm2D(p.Sub("conv1_bn"), cOut, bnConfig))
+	seq.Add(Conv2dNoBias(p.Sub("conv"), cIn, cOut, ksize, padding, stride))
+	seq.Add(nn.BatchNorm2D(p.Sub("bn"), cOut, bnConfig))
 	seq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
 		return xs.MustRelu(false)
 	}))

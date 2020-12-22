@@ -37,6 +37,21 @@ func loadResNetUnetModel(vs *nn.VarStore) ts.ModuleT {
 	return net
 }
 
+func loadCheckpoint(vs *nn.VarStore, checkpoint string) ts.ModuleT {
+	modelPath, err := filepath.Abs(checkpoint)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	net := unet.DefaultUNet(vs.Root())
+	err = vs.Load(modelPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return net
+}
+
 func fakeInput() (input, mask *ts.Tensor) {
 	name := "0486052bb"
 	var images, masks []ts.Tensor
@@ -83,7 +98,16 @@ func runTrain() {
 	}
 
 	vs := nn.NewVarStore(Device)
-	net := loadResNetUnetModel(vs)
+
+	var net ts.ModuleT
+	switch ModelFrom {
+	case "checkpoint":
+		net = loadCheckpoint(vs, ModelPath)
+	case "scratch":
+		net = loadResNetUnetModel(vs)
+	default:
+		panic("Shouldn't reach here")
+	}
 
 	trainDS := NewHubmapDataset(trainFiles)
 	s, err := dutil.NewBatchSampler(trainDS.Len(), BatchSize, true, true)
@@ -95,11 +119,11 @@ func runTrain() {
 		log.Fatal(err)
 	}
 
-	// var si *SI
-	// si = CPUInfo()
-	// fmt.Printf("Total RAM (MB):\t %8.2f\n", float64(si.TotalRam)/1024)
-	// fmt.Printf("Used RAM (MB):\t %8.2f\n", float64(si.TotalRam-si.FreeRam)/1024)
-	// startRAM := si.TotalRam - si.FreeRam
+	var si *SI
+	si = CPUInfo()
+	fmt.Printf("Total RAM (MB):\t %8.2f\n", float64(si.TotalRam)/1024)
+	fmt.Printf("Used RAM (MB):\t %8.2f\n", float64(si.TotalRam-si.FreeRam)/1024)
+	startRAM := si.TotalRam - si.FreeRam
 
 	// Epochs
 	for e := 0; e < Epochs; e++ {
@@ -107,6 +131,7 @@ func runTrain() {
 		count := 0
 		trainDL.Reset()
 		var losses []float64 = []float64{}
+
 		for trainDL.HasNext() {
 			/*
 			 *       // Validate
@@ -134,16 +159,15 @@ func runTrain() {
 				x.MustDrop()
 			}
 
-			lr := 0.001
 			var opt *nn.Optimizer
 			switch OptStr {
 			case "SGD":
-				opt, err = nn.DefaultSGDConfig().Build(vs, lr)
+				opt, err = nn.DefaultSGDConfig().Build(vs, LR)
 				if err != nil {
 					log.Fatal(err)
 				}
 			case "Adam":
-				opt, err = nn.DefaultAdamConfig().Build(vs, lr)
+				opt, err = nn.DefaultAdamConfig().Build(vs, LR)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -163,7 +187,8 @@ func runTrain() {
 			pred := logit.MustTotype(gotch.Double, true)
 			target := maskTs.MustTo(Device, true)
 
-			loss := criterionBinaryCrossEntropy(pred, target)
+			// loss := criterionBinaryCrossEntropy(pred, target)
+			loss := LossFunc(pred, target)
 			pred.MustDrop()
 			target.MustDrop()
 
@@ -172,14 +197,14 @@ func runTrain() {
 			lossVal := loss.Float64Values()[0]
 			losses = append(losses, lossVal)
 			loss.MustDrop()
-			/*
-			 *       if Device == gotch.CPU {
-			 *         si = CPUInfo()
-			 *         fmt.Printf("Batch %03d\t Loss: %6.4f\tUsed: [%8.2f MiB]\n", count, lossVal, (float64(si.TotalRam-si.FreeRam)-float64(startRAM))/1024)
-			 *       } else {
-			 *         fmt.Printf("Batch %03d\t Loss: %6.4f\n", count, lossVal)
-			 *       }
-			 *  */
+
+			if Device == gotch.CPU {
+				si = CPUInfo()
+				fmt.Printf("Batch %03d\t Loss: %6.4f\tUsed: [%8.2f MiB]\n", count, lossVal, (float64(si.TotalRam-si.FreeRam)-float64(startRAM))/1024)
+			} else {
+				fmt.Printf("Batch %03d\t Loss: %6.4f\n", count, lossVal)
+			}
+
 		}
 
 		var tloss float64
@@ -190,7 +215,7 @@ func runTrain() {
 		tloss = lossSum / float64(len(losses))
 
 		// validate
-		vloss := doValidate(net, Device)
+		// vloss, dice, tp, tn := doValidate(net, Device)
 		/*
 		 *     // save model checkpoint
 		 *     weightFile := fmt.Sprintf("./checkpoint/hubmap-epoch%v.gt", e)
@@ -199,18 +224,19 @@ func runTrain() {
 		 *       log.Fatal(err)
 		 *     }
 		 *  */
-		fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, time.Since(start).Minutes())
+		// fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %6.4f\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
+		fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
 	}
 
 	// save model checkpoint
-	weightFile := fmt.Sprintf("./checkpoint/hubmap.gt")
+	weightFile := fmt.Sprintf("./checkpoint/hubmap-%v.gt", time.Now().Unix())
 	err = vs.Save(weightFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func doValidate(net ts.ModuleT, device gotch.Device) float64 {
+func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64) {
 	testImageName := "0486052bb"
 	var testFiles []string
 
@@ -237,7 +263,12 @@ func doValidate(net ts.ModuleT, device gotch.Device) float64 {
 		log.Fatal(err)
 	}
 
-	var losses []float64
+	var (
+		losses []float64
+		dices  []float64
+		tpVals []float64
+		tnVals []float64
+	)
 	for testDL.HasNext() {
 		s, err := testDL.Next()
 		if err != nil {
@@ -259,24 +290,48 @@ func doValidate(net ts.ModuleT, device gotch.Device) float64 {
 		}
 
 		ts.NoGrad(func() {
+			mask := maskTs.MustTo(device, true)
 			logit := net.ForwardT(imgTs.MustTo(device, true), true).MustTotype(gotch.Double, true)
-			// dice := DiceScore(logit, maskTs.MustTo(device, true))
-			loss := criterionBinaryCrossEntropy(logit, maskTs.MustTo(device, true))
+
+			// loss
+			// loss := criterionBinaryCrossEntropy(logit, mask)
+			// loss := LossFunc(logit, mask)
+
+			// dice score
+			prob := logit.MustSigmoid(false)
+
+			loss := BCELoss(prob, mask)
 			lossVal := loss.Float64Values()[0]
 			losses = append(losses, lossVal)
-			// fmt.Printf("Test loss: %.5f", loss)
-			// fmt.Printf("Dice Score: %v", dice)
+
+			dice := DiceScore(prob, mask)
+			dices = append(dices, dice)
+
+			tp, tn := Accuracy(prob, mask)
+			tpVals = append(tpVals, tp)
+			tnVals = append(tnVals, tn)
+
 			imgTs.MustDrop()
-			maskTs.MustDrop()
+			mask.MustDrop()
 			logit.MustDrop()
 			loss.MustDrop()
+			prob.MustDrop()
 		})
 	}
 
-	var lossSum float64
-	for _, loss := range losses {
-		lossSum += loss
+	loss = avg(losses)
+	dice = avg(dices)
+	tp = avg(tpVals)
+	tn = avg(tnVals)
+
+	return loss, dice, tp, tn
+}
+
+func avg(input []float64) float64 {
+	var sum float64
+	for _, v := range input {
+		sum += v
 	}
 
-	return lossSum / float64(len(losses))
+	return sum / float64(len(input))
 }
