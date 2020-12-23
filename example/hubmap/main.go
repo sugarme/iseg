@@ -67,6 +67,8 @@ func main() {
 		processImage()
 	case "validate":
 		runValidate()
+	case "loss": // check loss function
+		checkLossFunc()
 	default:
 		err := fmt.Errorf("Unknown 'task' name. Please specify valid 'task' flag to run.\n")
 		panic(err)

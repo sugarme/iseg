@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/sugarme/gotch"
 	ts "github.com/sugarme/gotch/tensor"
+	"github.com/sugarme/gotch/vision"
 )
 
-// Binary Cross Entropy with Logits
+// criterionBinaryCrossEntropy calculates loss from input logits and mask
+// using Binary Cross Entropy with Logits algorithm.
 func criterionBinaryCrossEntropy(logit, mask *ts.Tensor) *ts.Tensor {
 	logitR := logit.MustReshape([]int64{-1}, false)
 	maskR := mask.MustReshape([]int64{-1}, false)
@@ -19,7 +22,8 @@ func criterionBinaryCrossEntropy(logit, mask *ts.Tensor) *ts.Tensor {
 	return retVal
 }
 
-// Binary Cross Entropy Loss
+// BCELoss calculates loss from input predict p-values and ground truth for a mask
+// using Binary Cross Entropy algorithm.
 func BCELoss(probability, mask *ts.Tensor) *ts.Tensor {
 	p := probability.MustView([]int64{-1}, false)
 	t := mask.MustView([]int64{-1}, false)
@@ -29,10 +33,13 @@ func BCELoss(probability, mask *ts.Tensor) *ts.Tensor {
 	// 1-t
 	t1 := t.MustMul1(ts.FloatScalar(-1), false).MustAdd1(ts.FloatScalar(1), true)
 
+	// log(p)
 	pclip := p.MustClip(ts.FloatScalar(1e-6), ts.FloatScalar(1), false)
-	logp := pclip.MustLog(true)
+	logp := pclip.MustLog(true).MustMul1(ts.FloatScalar(-1), true)
+
+	// log(1-p)
 	p1clip := p1.MustClip(ts.FloatScalar(1e-6), ts.FloatScalar(1), true)
-	logn := p1clip.MustLog(true)
+	logn := p1clip.MustLog(true).MustMul1(ts.FloatScalar(-1), true)
 
 	// t * logp
 	tlogp := t.MustMul(logp, true)
@@ -51,39 +58,77 @@ func BCELoss(probability, mask *ts.Tensor) *ts.Tensor {
 // Ref. https://github.com/pytorch/pytorch/issues/1249
 // http://campar.in.tum.de/pub/milletari2016Vnet/milletari2016Vnet.pdf
 // https://www.jeremyjordan.me/semantic-segmentation/#:~:text=Another%20popular%20loss%20function%20for,denotes%20perfect%20and%20complete%20overlap.
-func DiceScore(probability, mask *ts.Tensor) float64 {
+func DiceScore(probability, mask *ts.Tensor, thresholdOpt ...float64) float64 {
+	threshold := 0.5
+	if len(thresholdOpt) > 0 {
+		threshold = thresholdOpt[0]
+	}
 	// Flatten
 	iflat := probability.MustView([]int64{-1}, false)
 	tflat := mask.MustView([]int64{-1}, false)
-	p := iflat.MustGt(ts.FloatScalar(0.5), true)
-	t := tflat.MustGt(ts.FloatScalar(0.5), true)
-	ptMul := p.MustMul(t, false)
-	overlap := ptMul.MustSum(gotch.Double, true).Float64Values()[0]
-	union := p.MustSum(gotch.Double, true).Float64Values()[0] + t.MustSum(gotch.Double, true).Float64Values()[0]
+	p := iflat.MustGt(ts.FloatScalar(threshold), true)
+	t := tflat.MustGt(ts.FloatScalar(threshold), true)
 
+	// p*t
+	pt := p.MustMul(t, false)
+	ptSum := pt.MustSum(gotch.Double, true)
+
+	// sum(p) + sum(t)
+	pSum := p.MustSum(gotch.Double, true)
+	tSum := t.MustSum(gotch.Double, true)
+
+	overlap := ptSum.Float64Values()[0]
+	union := pSum.Float64Values()[0] + tSum.Float64Values()[0]
+
+	// (2 * sum(p*t))/(sum(p) + sum(t) + epsilon)
 	dice := (2 * overlap) / (union + 0.001)
+
+	pSum.MustDrop()
+	tSum.MustDrop()
+	ptSum.MustDrop()
 
 	return dice
 }
 
+// SoftDiceLoss calculates ratio between the overlap of the  positive instances
+// between 2 sets, and their mutual combined values.
+// https://www.kaggle.com/bigironsphere/loss-function-library-keras-pytorch
 // Ref. https://gist.github.com/jeremyjordan/9ea3032a32909f71dd2ab35fe3bacc08
 // Ref. https://www.kaggle.com/finlay/pytorch-fcn-resnet50-in-20-minute
-func SoftDiceLoss(x, y *ts.Tensor) *ts.Tensor {
-	dims := []int64{-2, -1}
+// Other name: Jaccard loss; Intersection over union loss
+// (overlap(x, y))/(|x| + |y| - overlap(x, y))
+func SoftDiceLoss(x, y *ts.Tensor) *ts.Tensor { // x prediction, y ground truth
+	dims := []int64{-2, -1} // Calculate on last 2 dims (image H x W)
 	smooth := 1.0
 
-	xyMul := x.MustMul(y, false)
-	tp := xyMul.MustSum1(dims, false, gotch.Double, true)
+	// x*y
+	xy := x.MustMul(y, false)
 
+	// sum(x*y)
+	tp := xy.MustSum1(dims, false, gotch.Double, true)
+
+	// (1 - y)
 	y1 := y.MustAdd1(ts.FloatScalar(-1), false)
-	xy1Mul := y1.MustMul(x, true)
-	fp := xy1Mul.MustSum1(dims, false, gotch.Double, true)
 
+	// x*(1-y)
+	xy1 := y1.MustMul(x, true)
+
+	// sum(x*(1-y))
+	fp := xy1.MustSum1(dims, false, gotch.Double, true)
+
+	// (1 - x)
 	x1 := x.MustAdd1(ts.FloatScalar(-1), false)
-	x1yMul := x1.MustMul(y, true)
-	fn := x1yMul.MustSum1(dims, false, gotch.Double, true)
 
+	// y*(1-x)
+	x1y := x1.MustMul(y, true)
+
+	// sum(y*(1-x))
+	fn := x1y.MustSum1(dims, false, gotch.Double, true)
+
+	// 2 * sum(x*y) + smooth
 	numerator := tp.MustMul1(ts.FloatScalar(2.0), false).MustAdd1(ts.FloatScalar(smooth), true)
+
+	// (2 * sum(x*y) + smooth) + sum(x*(1-y)) + sum(y*(1-x))
 	denominator := numerator.MustAdd(fp, false).MustAdd(fn, false)
 
 	dc := numerator.MustDiv(denominator, true)
@@ -113,23 +158,50 @@ func LossFunc(logit, mask *ts.Tensor) *ts.Tensor {
 }
 
 // Accuracy calculates true positive and true negative.
-func Accuracy(input, target *ts.Tensor) (tp, tn float64) {
+// Default threshold = 0.5.
+func Accuracy(input, target *ts.Tensor, thresholdOpt ...float64) (tp, tn float64) {
+	threshold := 0.5
+	if len(thresholdOpt) > 0 {
+		threshold = thresholdOpt[0]
+	}
+
 	iflat := input.MustView([]int64{-1}, false)
 	tflat := target.MustView([]int64{-1}, false)
-	p := iflat.MustGt(ts.FloatScalar(0.5), true)
-	t := tflat.MustGt(ts.FloatScalar(0.5), true)
-	ptMul := p.MustMul(t, false)
-	overlap := ptMul.MustSum(gotch.Double, true).Float64Values()[0]
-	tSum := t.MustSum(gotch.Double, false).Float64Values()[0]
-	tp = overlap / tSum
 
-	p1 := p.MustAdd1(ts.FloatScalar(-1), false)
-	t1 := t.MustAdd1(ts.FloatScalar(-1), false)
-	p1Sum := p1.MustSum(gotch.Double, false)
-	t1Sum := t1.MustSum(gotch.Double, false)
-	pt1Mul := p1Sum.MustMul(t1Sum, false)
-	pt1Sum := pt1Mul.MustSum(gotch.Double, true)
-	tn = pt1Sum.Float64Values()[0] / t1Sum.Float64Values()[0]
+	p := iflat.MustGt(ts.FloatScalar(threshold), true)
+	t := tflat.MustGt(ts.FloatScalar(threshold), true)
+
+	// p*t
+	pt := p.MustMul(t, false)
+
+	// sum(p*t)
+	overlap := pt.MustSum(gotch.Double, true)
+
+	// sum(t)
+	tSum := t.MustSum(gotch.Double, false)
+
+	// sum(p*t)/sum(t)
+	tp = overlap.Float64Values()[0] / tSum.Float64Values()[0]
+
+	// 1-p
+	p1 := p.MustAdd1(ts.FloatScalar(-1), true)
+	// 1-t
+	t1 := t.MustAdd1(ts.FloatScalar(-1), true)
+
+	// (1-p)*(1-t)
+	p1t1 := p1.MustMul(t1, true)
+
+	// sum((1-p)*(1-t))
+	numerator := p1t1.MustSum(gotch.Double, true)
+
+	// sum(1-t)
+	denominator := t1.MustSum(gotch.Double, true)
+
+	// sum((1-p)*(1-t))/sum(1-t)
+	tn = numerator.Float64Values()[0] / denominator.Float64Values()[0]
+
+	numerator.MustDrop()
+	denominator.MustDrop()
 
 	return tp, tn
 }
@@ -148,6 +220,29 @@ func runCheckDiceScore() {
 	fmt.Printf("input: %v\n", input)
 	fmt.Printf("target: %v\n", input)
 	fmt.Printf("Dice Score: %v\n", dice) // 0.999...
+	fmt.Printf("tp: %v\n", tp)
+	fmt.Printf("tn: %v\n", tn)
+}
+
+func checkLossFunc() {
+	file := "input/tile/mask/2f6ecfcdf_010.png"
+	maskTs, err := vision.Load(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	maskGray, err := rgb2GrayScale(maskTs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	maskTs.MustDrop()
+	input := maskGray.MustDiv1(ts.FloatScalar(255.0), true)
+
+	dice := DiceScore(input, input)
+	tp, tn := Accuracy(input, input)
+
+	fmt.Printf("input: %5.3f\n", input)
+	fmt.Printf("Dice Score: %4.3f\n", dice) // 0.999...
 	fmt.Printf("tp: %v\n", tp)
 	fmt.Printf("tn: %v\n", tn)
 }

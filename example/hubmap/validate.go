@@ -46,17 +46,36 @@ func runCheckModel() {
 	// net := loadModel("./checkpoint/hubmap.gt", vs)
 	net := loadModel(ModelPath, vs)
 	image := "./input/tile/image/2f6ecfcdf_014.png"
+	mask := "./input/tile/mask/2f6ecfcdf_014.png"
 
 	imgTs, err := vision.Load(image)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	maskTs, err := vision.Load(mask)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	maskGray, err := rgb2GrayScale(maskTs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// targetPixels := maskGray.MustDiv1(ts.FloatScalar(255.0), false)
+	// fmt.Printf("%0.2f", targetPixels)
+	mOut := maskGray.MustUnsqueeze(0, true)
+	err = vision.Save(mOut, "./test-mask.png")
+	if err != nil {
+		panic(err)
+	}
+	maskTs.MustDrop()
+
 	x := imgTs.MustDiv1(ts.FloatScalar(255.0), true)
 	input := x.MustUnsqueeze(0, true)
 	logit := net.ForwardT(input, false)
 	prob := logit.MustSigmoid(true)
-	fmt.Printf("%4.1f", prob)
+	// fmt.Printf("%0.2f", prob)
 
 	threshold := 0.1
 	// out1 := out.MustExp(true).MustGt(ts.FloatScalar(0.2), true).MustSqueeze1(0, true)

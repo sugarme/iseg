@@ -187,8 +187,8 @@ func runTrain() {
 			pred := logit.MustTotype(gotch.Double, true)
 			target := maskTs.MustTo(Device, true)
 
-			loss := criterionBinaryCrossEntropy(pred, target)
-			// loss := LossFunc(pred, target)
+			// loss := criterionBinaryCrossEntropy(pred, target)
+			loss := LossFunc(pred, target)
 			pred.MustDrop()
 			target.MustDrop()
 
@@ -214,7 +214,7 @@ func runTrain() {
 		tloss = lossSum / float64(len(losses))
 
 		// validate
-		// vloss, dice, tp, tn := doValidate(net, Device)
+		vloss, dice, tp, tn := doValidate(net, Device)
 		/*
 		 *     // save model checkpoint
 		 *     weightFile := fmt.Sprintf("./checkpoint/hubmap-epoch%v.gt", e)
@@ -223,8 +223,8 @@ func runTrain() {
 		 *       log.Fatal(err)
 		 *     }
 		 *  */
-		// fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %6.4f\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
-		fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
+		fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %6.4f\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
+		// fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
 	}
 
 	// save model checkpoint
@@ -293,21 +293,21 @@ func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64
 			img := imgTs.MustTo(device, true)
 			logit := net.ForwardT(img, false).MustTotype(gotch.Double, true)
 
-			// loss
+			// Loss
 			// loss := criterionBinaryCrossEntropy(logit, mask)
-			// loss := LossFunc(logit, mask)
-
-			// dice score
-			prob := logit.MustSigmoid(false)
-
-			loss := BCELoss(prob, mask)
+			// loss := BCELoss(prob, mask)
+			loss := LossFunc(logit, mask)
 			lossVal := loss.Float64Values()[0]
 			losses = append(losses, lossVal)
 
-			dice := DiceScore(prob, mask)
+			// Dice score
+			threshold := 0.3
+			prob := logit.MustSigmoid(false)
+			dice := DiceScore(prob, mask, threshold)
 			dices = append(dices, dice)
 
-			tp, tn := Accuracy(prob, mask)
+			// Accuracy
+			tp, tn := Accuracy(prob, mask, threshold)
 			tpVals = append(tpVals, tp)
 			tnVals = append(tnVals, tn)
 
