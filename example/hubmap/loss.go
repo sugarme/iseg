@@ -72,12 +72,11 @@ func DiceScore(probability, mask *ts.Tensor, thresholdOpt ...float64) float64 {
 	// p*t
 	pt := p.MustMul(t, false)
 	ptSum := pt.MustSum(gotch.Double, true)
+	overlap := ptSum.Float64Values()[0]
 
 	// sum(p) + sum(t)
 	pSum := p.MustSum(gotch.Double, true)
 	tSum := t.MustSum(gotch.Double, true)
-
-	overlap := ptSum.Float64Values()[0]
 	union := pSum.Float64Values()[0] + tSum.Float64Values()[0]
 
 	// (2 * sum(p*t))/(sum(p) + sum(t) + epsilon)

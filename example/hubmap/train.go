@@ -8,13 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sugarme/iseg/example/hubmap/dutil"
-
 	"github.com/sugarme/gotch"
 	"github.com/sugarme/gotch/nn"
 	ts "github.com/sugarme/gotch/tensor"
 	"github.com/sugarme/gotch/vision"
 
+	"github.com/sugarme/iseg/dutil"
 	"github.com/sugarme/iseg/unet"
 )
 
@@ -86,6 +85,35 @@ func fakeInput() (input, mask *ts.Tensor) {
 }
 
 func runTrain() {
+	var err error
+	vs := nn.NewVarStore(Device)
+	var net ts.ModuleT
+	switch ModelFrom {
+	case "checkpoint":
+		net = loadCheckpoint(vs, ModelPath)
+	case "scratch":
+		net = loadResNetUnetModel(vs)
+	default:
+		panic("Shouldn't reach here")
+	}
+
+	var opt *nn.Optimizer
+	switch OptStr {
+	case "SGD":
+		opt, err = nn.DefaultSGDConfig().Build(vs, LR)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case "Adam":
+		opt, err = nn.DefaultAdamConfig().Build(vs, LR)
+		if err != nil {
+			log.Fatal(err)
+		}
+	default:
+		err = fmt.Errorf("Unspecified/Invalid Optimizer option: '%v'.\n", OptStr)
+		log.Fatal(err)
+	}
+
 	tileImgPath := fmt.Sprintf("%v/tile/image", DataPath)
 	files, err := ioutil.ReadDir(tileImgPath)
 	if err != nil {
@@ -95,18 +123,6 @@ func runTrain() {
 	var trainFiles []string
 	for _, f := range files {
 		trainFiles = append(trainFiles, f.Name())
-	}
-
-	vs := nn.NewVarStore(Device)
-
-	var net ts.ModuleT
-	switch ModelFrom {
-	case "checkpoint":
-		net = loadCheckpoint(vs, ModelPath)
-	case "scratch":
-		net = loadResNetUnetModel(vs)
-	default:
-		panic("Shouldn't reach here")
 	}
 
 	trainDS := NewHubmapDataset(trainFiles)
@@ -159,22 +175,6 @@ func runTrain() {
 				x.MustDrop()
 			}
 
-			var opt *nn.Optimizer
-			switch OptStr {
-			case "SGD":
-				opt, err = nn.DefaultSGDConfig().Build(vs, LR)
-				if err != nil {
-					log.Fatal(err)
-				}
-			case "Adam":
-				opt, err = nn.DefaultAdamConfig().Build(vs, LR)
-				if err != nil {
-					log.Fatal(err)
-				}
-			default:
-				err = fmt.Errorf("Unspecified/Invalid Optimizer option: '%v'.\n", OptStr)
-				log.Fatal(err)
-			}
 			/*
 			 *       if Device == gotch.CPU {
 			 *         si = CPUInfo()
@@ -187,8 +187,8 @@ func runTrain() {
 			pred := logit.MustTotype(gotch.Double, true)
 			target := maskTs.MustTo(Device, true)
 
-			// loss := criterionBinaryCrossEntropy(pred, target)
-			loss := LossFunc(pred, target)
+			loss := criterionBinaryCrossEntropy(pred, target)
+			// loss := LossFunc(pred, target)
 			pred.MustDrop()
 			target.MustDrop()
 
@@ -292,17 +292,17 @@ func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64
 			mask := maskTs.MustTo(device, true)
 			img := imgTs.MustTo(device, true)
 			logit := net.ForwardT(img, false).MustTotype(gotch.Double, true)
+			prob := logit.MustSigmoid(false)
 
 			// Loss
 			// loss := criterionBinaryCrossEntropy(logit, mask)
-			// loss := BCELoss(prob, mask)
-			loss := LossFunc(logit, mask)
+			loss := BCELoss(prob, mask)
+			// loss := LossFunc(logit, mask)
 			lossVal := loss.Float64Values()[0]
 			losses = append(losses, lossVal)
 
 			// Dice score
-			threshold := 0.3
-			prob := logit.MustSigmoid(false)
+			threshold := 0.5
 			dice := DiceScore(prob, mask, threshold)
 			dices = append(dices, dice)
 

@@ -12,23 +12,24 @@ import (
 )
 
 func loadModel(file string, vs *nn.VarStore) ts.ModuleT {
+	fn := filepath.Base(file)
 	modelPath, err := filepath.Abs(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	net := unet.DefaultUNet(vs.Root())
-	if file == "./model/resnet34.ot" {
+	if fn == "resnet34.ot" {
 		_, err = vs.LoadPartial(modelPath)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		return net
 	}
 
 	err = vs.Load(modelPath)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return net
 
@@ -45,8 +46,10 @@ func runCheckModel() {
 	vs := nn.NewVarStore(Device)
 	// net := loadModel("./checkpoint/hubmap.gt", vs)
 	net := loadModel(ModelPath, vs)
-	image := "./input/tile/image/2f6ecfcdf_014.png"
-	mask := "./input/tile/mask/2f6ecfcdf_014.png"
+	// image := "./input/tile-1/image/2f6ecfcdf_014.png"
+	// mask := "./input/tile-1/mask/2f6ecfcdf_014.png"
+	image := "./input/tile/image/0486052bb_120.png"
+	mask := "./input/tile/mask/0486052bb_120.png"
 
 	imgTs, err := vision.Load(image)
 	if err != nil {
@@ -62,6 +65,7 @@ func runCheckModel() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	// targetPixels := maskGray.MustDiv1(ts.FloatScalar(255.0), false)
 	// fmt.Printf("%0.2f", targetPixels)
 	mOut := maskGray.MustUnsqueeze(0, true)

@@ -131,7 +131,7 @@ func (n *UNetDecoder) ForwardFeatures(features []*ts.Tensor, train bool) *ts.Ten
 		log.Fatalf("Expected features of 6 tensors. Got %v\n", len(features))
 	}
 
-	// feat5: [bz 512 8 8]
+	//                                                        feat5: [bz 512 8 8]
 	center := n.center.ForwardT(features[5], train)        // center [bz 512 8 8]
 	skip0 := upsample(center, features[4])                 // feat4  [bz 256 16 16]
 	z0 := n.decode0.ForwardSkip(features[4], skip0, train) // z0     [bz 256 16 16]
@@ -143,7 +143,7 @@ func (n *UNetDecoder) ForwardFeatures(features []*ts.Tensor, train bool) *ts.Ten
 	z3 := n.decode3.ForwardSkip(features[1], skip3, train) // z3     [bz 32 64 64]
 	skip4 := upsample(z3, features[0])                     // feat0  [bz 3 256 256]
 	z4 := n.decode4.ForwardSkip(skip4, nil, train)         // z4     [bz 16 256 256]
-	logit := n.logit.ForwardT(z4, train)                   // logit  [bz 16 256 256]
+	logit := n.logit.ForwardT(z4, train)                   // logit  [bz 1 256 256]
 
 	center.MustDrop()
 	z0.MustDrop()

@@ -142,3 +142,45 @@ func Conv2dRelu(p *nn.Path, cIn, cOut, ksize, padding, stride int64) *nn.Sequent
 
 	return seq
 }
+
+// DoubleConv is a SequentialT composed of 2x (conv, bn, ReLU)
+func DoubleConv(p *nn.Path, cIn, cOut int64, cMidOpt ...int64) *nn.SequentialT {
+	ksize := int64(3)
+	stride := int64(1)
+	padding := int64(1)
+
+	var cMid int64 = cOut
+	if len(cMidOpt) > 0 {
+		cMid = cMidOpt[0]
+	}
+
+	bnConfig := nn.DefaultBatchNormConfig()
+	bnConfig.Eps = 0.001
+
+	seq := nn.SeqT()
+	// 1
+	seq.Add(Conv2d(p.Sub("conv1"), cIn, cMid, ksize, padding, stride))
+	seq.Add(nn.BatchNorm2D(p.Sub("bn1"), cMid, bnConfig))
+	seq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
+		return xs.MustRelu(false)
+	}))
+	// 2
+	seq.Add(Conv2d(p.Sub("conv2"), cMid, cOut, ksize, padding, stride))
+	seq.Add(nn.BatchNorm2D(p.Sub("bn2"), cOut, bnConfig))
+	seq.AddFn(nn.NewFunc(func(xs *ts.Tensor) *ts.Tensor {
+		return xs.MustRelu(false)
+	}))
+
+	return seq
+}
+
+// Upsample performs interpolation using `nearest` algorithm
+func Upsample(x, ref *ts.Tensor) *ts.Tensor {
+	xSize := x.MustSize()
+	refSize := ref.MustSize()
+	if reflect.DeepEqual(xSize[2:], refSize[2:]) {
+		return x.MustDetach(false)
+	}
+
+	return x.MustUpsampleNearest2d(refSize[2:], nil, nil, false)
+}

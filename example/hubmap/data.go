@@ -7,7 +7,7 @@ import (
 
 	ts "github.com/sugarme/gotch/tensor"
 	"github.com/sugarme/gotch/vision"
-	"github.com/sugarme/iseg/example/hubmap/dutil"
+	"github.com/sugarme/iseg/dutil"
 )
 
 // HubmapDataset implement dutil.Dataset
@@ -51,11 +51,11 @@ func (ds *HubmapDataset) Item(idx int) (interface{}, error) {
 		return nil, err
 	}
 	maskTs.MustDrop()
-	mask := maskGray.MustDiv1(ts.FloatScalar(255.0), true)
+	// mask := maskGray.MustDiv1(ts.FloatScalar(255.0), true)
 
 	return ImageMask{
 		image: *img,
-		mask:  *mask,
+		mask:  *maskGray,
 	}, err
 }
 
