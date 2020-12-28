@@ -189,6 +189,7 @@ func runTrain() {
 			target := maskTs.MustDetach(true).MustTo(Device, true)
 
 			loss := criterionBinaryCrossEntropy(pred, target)
+			loss.MustRequiresGrad_(true)
 			// loss := LossFunc(pred, target)
 			pred.MustDrop()
 			target.MustDrop()
@@ -230,10 +231,26 @@ func runTrain() {
 
 	// save model checkpoint
 	weightFile := fmt.Sprintf("./checkpoint/hubmap-%v.gt", time.Now().Unix())
+
 	err = vs.Save(weightFile)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	/*
+	 *   var namedTensors []ts.NamedTensor
+	 *   for k, v := range vs.Vars.NamedVariables {
+	 *     namedTensors = append(namedTensors, ts.NamedTensor{
+	 *       Name:   k,
+	 *       Tensor: v,
+	 *     })
+	 *   }
+	 *
+	 *   err = ts.SaveMultiNew(namedTensors, weightFile)
+	 *   if err != nil {
+	 *     log.Fatal(err)
+	 *   } */
+
 }
 
 func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64) {
