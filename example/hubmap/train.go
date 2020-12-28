@@ -14,6 +14,7 @@ import (
 	"github.com/sugarme/gotch/vision"
 
 	"github.com/sugarme/iseg/dutil"
+	"github.com/sugarme/iseg/metric"
 	"github.com/sugarme/iseg/unet"
 )
 
@@ -181,11 +182,11 @@ func runTrain() {
 			 *         startRAM = si.TotalRam - si.FreeRam
 			 *       }
 			 *  */
-			input := imgTs.MustTo(Device, true)
+			input := imgTs.MustDetach(true).MustTo(Device, true)
 			logit := net.ForwardT(input, true)
 			input.MustDrop()
 			pred := logit.MustTotype(gotch.Double, true)
-			target := maskTs.MustTo(Device, true)
+			target := maskTs.MustDetach(true).MustTo(Device, true)
 
 			loss := criterionBinaryCrossEntropy(pred, target)
 			// loss := LossFunc(pred, target)
@@ -223,7 +224,7 @@ func runTrain() {
 		 *       log.Fatal(err)
 		 *     }
 		 *  */
-		fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %6.4f\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
+		fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %v\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
 		// fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
 	}
 
@@ -303,7 +304,8 @@ func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64
 
 			// Dice score
 			threshold := 0.5
-			dice := DiceScore(prob, mask, threshold)
+			// dice := DiceScore(prob, mask, threshold)
+			dice := metric.DiceCoeffBatch(prob, mask, threshold)
 			dices = append(dices, dice)
 
 			// Accuracy

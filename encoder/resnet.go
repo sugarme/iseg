@@ -41,9 +41,10 @@ func NewResNet34Encoder(p *nn.Path) *ResNetEncoder {
 func rgbNormalize(x *ts.Tensor) *ts.Tensor {
 	meanVals := []float32{0.485, 0.456, 0.406} // image RGB mean
 	sdVals := []float32{0.229, 0.224, 0.225}   // image RGB standard error
+	device := x.MustDevice()
 
-	mean := ts.MustOfSlice(meanVals).MustView([]int64{1, 3, 1, 1}, true)
-	sd := ts.MustOfSlice(sdVals).MustView([]int64{1, 3, 1, 1}, true)
+	mean := ts.MustOfSlice(meanVals).MustView([]int64{1, 3, 1, 1}, true).MustDetach(true).MustTo(device, true)
+	sd := ts.MustOfSlice(sdVals).MustView([]int64{1, 3, 1, 1}, true).MustDetach(true).MustTo(device, true)
 
 	// x = (x - mean)/sd
 	n := x.MustSub(mean, false).MustDiv(sd, true)
