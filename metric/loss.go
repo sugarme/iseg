@@ -46,10 +46,12 @@ func DiceCoeff(prob, mask *ts.Tensor) float64 {
 
 	// 2 * intersection + eps
 	numerator := p.MustDot(m, false).MustMul1(ts.FloatScalar(2.0), true).MustAdd1(ts.FloatScalar(eps), true)
+	p.MustDrop()
+	m.MustDrop()
 
 	// union
-	pSum := prob.MustSum(gotch.Double, true)
-	mSum := mask.MustSum(gotch.Double, true)
+	pSum := prob.MustSum(gotch.Double, false)
+	mSum := mask.MustSum(gotch.Double, false)
 	denominator := pSum.MustAdd(mSum, true).MustAdd1(ts.FloatScalar(eps), true)
 	mSum.MustDrop()
 
@@ -77,8 +79,8 @@ func DiceCoeffBatch(prob, target *ts.Tensor, thresholdOpt ...float64) float64 {
 		y := target.Idx(ts.NewSelect(int64(i)))
 		dice := DiceCoeff(x, y)
 		diceCum += dice
-		// x.MustDrop()
-		// y.MustDrop()
+		x.MustDrop()
+		y.MustDrop()
 	}
 
 	pred.MustDrop()

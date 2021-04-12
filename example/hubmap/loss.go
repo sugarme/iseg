@@ -36,6 +36,7 @@ func BCELoss(probability, mask *ts.Tensor) *ts.Tensor {
 	// log(p)
 	pclip := p.MustClip(ts.FloatScalar(1e-6), ts.FloatScalar(1), false)
 	logp := pclip.MustLog(true).MustMul1(ts.FloatScalar(-1), true)
+	p.MustDrop()
 
 	// log(1-p)
 	p1clip := p1.MustClip(ts.FloatScalar(1e-6), ts.FloatScalar(1), true)
@@ -43,8 +44,11 @@ func BCELoss(probability, mask *ts.Tensor) *ts.Tensor {
 
 	// t * logp
 	tlogp := t.MustMul(logp, true)
+	logp.MustDrop()
+
 	// (1-t)*logn
 	t1logn := t1.MustMul(logn, true)
+	logn.MustDrop()
 
 	loss := tlogp.MustAdd(t1logn, true)
 	t1logn.MustDrop()
@@ -181,6 +185,8 @@ func Accuracy(input, target *ts.Tensor, thresholdOpt ...float64) (tp, tn float64
 
 	// sum(p*t)/sum(t)
 	tp = overlap.Float64Values()[0] / tSum.Float64Values()[0]
+	overlap.MustDrop()
+	tSum.MustDrop()
 
 	// 1-p
 	p1 := p.MustAdd1(ts.FloatScalar(-1), true)
@@ -198,7 +204,6 @@ func Accuracy(input, target *ts.Tensor, thresholdOpt ...float64) (tp, tn float64
 
 	// sum((1-p)*(1-t))/sum(1-t)
 	tn = numerator.Float64Values()[0] / denominator.Float64Values()[0]
-
 	numerator.MustDrop()
 	denominator.MustDrop()
 
