@@ -216,17 +216,20 @@ func runTrain() {
 		tloss = lossSum / float64(len(losses))
 
 		// validate
-		// vloss, dice, tp, tn := doValidate(net, Device)
-		/*
-		 *     // save model checkpoint
-		 *     weightFile := fmt.Sprintf("./checkpoint/hubmap-epoch%v.gt", e)
-		 *     err := vs.Save(weightFile)
-		 *     if err != nil {
-		 *       log.Fatal(err)
-		 *     }
-		 *  */
-		// fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %v\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
-		fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
+		if e != 0 && e%20 == 0 {
+			vloss, dice, tp, tn := doValidate(net, Device)
+			/*
+			 *     // save model checkpoint
+			 *     weightFile := fmt.Sprintf("./checkpoint/hubmap-epoch%v.gt", e)
+			 *     err := vs.Save(weightFile)
+			 *     if err != nil {
+			 *       log.Fatal(err)
+			 *     }
+			 *  */
+			fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %v\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
+		} else {
+			fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
+		}
 	} // end of epoch for-loop
 
 	// save model checkpoint
