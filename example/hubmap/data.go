@@ -63,6 +63,10 @@ func (ds *HubmapDataset) DType() reflect.Type {
 	return reflect.TypeOf(ds.fnames)
 }
 
+func (ds *HubmapDataset) ItemType() reflect.Type {
+	return reflect.TypeOf(ImageMask{})
+}
+
 func runCheckDataLoader() {
 	// mockup
 	mockName := "0486052bb"

@@ -11,6 +11,7 @@ import (
 type Dataset interface {
 	Item(idx int) (interface{}, error)
 	DType() reflect.Type
+	ItemType() reflect.Type
 	Len() int
 }
 
@@ -55,6 +56,10 @@ func (ds *SliceDataset) Len() int {
 
 func (ds *SliceDataset) DType() reflect.Type {
 	return reflect.TypeOf(ds.data)
+}
+
+func (ds *SliceDataset) ItemType() reflect.Type {
+	return ds.DType().Elem()
 }
 
 // MapDataset holds samples in a map.
@@ -112,6 +117,10 @@ func (ds *MapDataset) Len() int {
 
 func (ds *MapDataset) DType() reflect.Type {
 	return reflect.TypeOf(ds.data)
+}
+
+func (ds *MapDataset) ItemType() reflect.Type {
+	return ds.DType().Elem()
 }
 
 // NOTE. To make this package agnostic, we don't add TensorDataset here.
