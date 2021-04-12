@@ -206,7 +206,7 @@ func runTrain() {
 			// } else {
 			// fmt.Printf("Batch %03d\t Loss: %6.4f\n", count, lossVal)
 			// }
-		}
+		} // end of dataloader interation
 
 		var tloss float64
 		var lossSum float64
@@ -227,7 +227,7 @@ func runTrain() {
 		 *  */
 		// fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %v\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
 		fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
-	}
+	} // end of epoch for-loop
 
 	// save model checkpoint
 	weightFile := fmt.Sprintf("./checkpoint/hubmap-%v.gt", time.Now().Unix())
