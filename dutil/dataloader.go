@@ -61,6 +61,18 @@ func checkDKind(data Dataset) (DatasetKind, error) {
 	}
 }
 
+func (dl *DataLoader) elemType() (reflect.Type, error) {
+	dtyp := dl.dataset.DType()
+	dkind := dtyp.Kind().String()
+	switch dkind {
+	case "slice", "map":
+		return dtyp.Elem(), nil
+	default:
+		err := fmt.Errorf("DataLoader.elemType: failed. Unsupport DType (%v)", dkind)
+		return nil, err
+	}
+}
+
 // Next acts as iterator to return next sample(s) from dataset.
 func (dl *DataLoader) Next() (interface{}, error) {
 	if !dl.HasNext() {
@@ -80,12 +92,10 @@ func (dl *DataLoader) Next() (interface{}, error) {
 	}
 
 	// Batch sampling
-	elem, err := dl.dataset.Item(0)
+	elemType, err := dl.elemType()
 	if err != nil {
 		return nil, err
 	}
-
-	elemType := reflect.TypeOf(elem)
 
 	items := reflect.MakeSlice(reflect.SliceOf(elemType), 0, dl.dataset.Len())
 	nextIndex := dl.currIdx + dl.batchSize
