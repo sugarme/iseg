@@ -86,9 +86,13 @@ func fakeInput() (input, mask *ts.Tensor) {
 }
 
 func runTrain() {
-	var err error
+	var(
+		err error
+		net ts.ModuleT
+		bestDice float64 = 0.0
+	)
+
 	vs := nn.NewVarStore(Device)
-	var net ts.ModuleT
 	switch ModelFrom {
 	case "checkpoint":
 		net = loadCheckpoint(vs, ModelPath)
@@ -136,6 +140,11 @@ func runTrain() {
 		log.Fatal(err)
 	}
 
+	// Run first validate to get current bestDice
+	_, bestDice, _, _ = doValidate(net, Device)
+	fmt.Printf("Initial model file: %q\n", ModelPath)
+	fmt.Printf("Initial best dice: %0.5f\n", bestDice)
+
 	// var si *SI
 	// si = CPUInfo()
 	// fmt.Printf("Total RAM (MB):\t %8.2f\n", float64(si.TotalRam)/1024)
@@ -143,7 +152,7 @@ func runTrain() {
 	// startRAM := si.TotalRam - si.FreeRam
 
 	// Epochs
-	for e := 0; e < Epochs; e++ {
+	for e := 1; e <= Epochs; e++ {
 		start := time.Now()
 		count := 0
 		trainDL.Reset()
@@ -216,44 +225,23 @@ func runTrain() {
 		tloss = lossSum / float64(len(losses))
 
 		// validate
-		if e != 0 && e%20 == 0 {
+		if e != 0 && e%1 == 0 {
 			vloss, dice, tp, tn := doValidate(net, Device)
-			/*
-			 *     // save model checkpoint
-			 *     weightFile := fmt.Sprintf("./checkpoint/hubmap-epoch%v.gt", e)
-			 *     err := vs.Save(weightFile)
-			 *     if err != nil {
-			 *       log.Fatal(err)
-			 *     }
-			 *  */
+			if dice > bestDice{
+				bestDice = dice
+				fmt.Printf("new best dice: %0.5f. Saving model...", bestDice)
+				modelFile := "./checkpoint/hubmap-best-dice.gt"
+				err = vs.Save(modelFile)
+				if err != nil{
+					log.Fatal(err)
+				}
+				fmt.Printf("Done.\n")
+			}
 			fmt.Printf("Epoch %02d\t train loss: %6.4f\t valid loss: %6.4f\t dice: %v\t TP: %6.4f\t TN: %6.4f\t Taken time: %0.2fMin\n", e, tloss, vloss, dice, tp, tn, time.Since(start).Minutes())
 		} else {
 			fmt.Printf("Epoch %02d\t train loss: %6.4f\t Taken time: %0.2fMin\n", e, tloss, time.Since(start).Minutes())
 		}
-	} // end of epoch for-loop
-
-	// save model checkpoint
-	weightFile := fmt.Sprintf("./checkpoint/hubmap-%v.gt", time.Now().Unix())
-
-	err = vs.Save(weightFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	/*
-	 *   var namedTensors []ts.NamedTensor
-	 *   for k, v := range vs.Vars.NamedVariables {
-	 *     namedTensors = append(namedTensors, ts.NamedTensor{
-	 *       Name:   k,
-	 *       Tensor: v,
-	 *     })
-	 *   }
-	 *
-	 *   err = ts.SaveMultiNew(namedTensors, weightFile)
-	 *   if err != nil {
-	 *     log.Fatal(err)
-	 *   } */
-
+	} // end of for-loop
 }
 
 func doValidate(net ts.ModuleT, device gotch.Device) (loss, dice, tp, tn float64) {

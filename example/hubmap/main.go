@@ -28,6 +28,7 @@ var (
 	BatchSize    int     // batch size
 	ValidateSize int     // number of iterations that triggers running validation task
 	Epochs       int
+	BestDice float64
 )
 
 func init() {
