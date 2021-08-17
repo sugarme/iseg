@@ -10,7 +10,7 @@ require (
 	github.com/go-gota/gota v0.10.1
 	github.com/go-latex/latex v0.0.0-20200518072620-0806b477ea35 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
-	github.com/sugarme/gotch v0.3.13
+	github.com/sugarme/gotch v0.4.5
 	golang.org/x/image v0.0.0-20201208152932-35266b937fa6
 	gonum.org/v1/gonum v0.8.1 // indirect
 	gonum.org/v1/plot v0.0.0-20190515093506-e2840ee46a6b

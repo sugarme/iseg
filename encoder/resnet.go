@@ -17,8 +17,8 @@ type ResNetEncoder struct {
 
 // ForwardAll implements Encoder interface for ResNetEncoder
 func (e *ResNetEncoder) ForwardAll(x *ts.Tensor, train bool) []*ts.Tensor {
-	xn := rgbNormalize(x)
-	// xn := x.MustDetach(false)
+	// xn := rgbNormalize(x)
+	xn := x.MustDetach(false)
 	x0 := e.layer0.ForwardT(xn, train)
 	x1 := e.layer1.ForwardT(x0, train)
 	x2 := e.layer2.ForwardT(x1, train)
