@@ -1,7 +1,7 @@
 package encoder
 
 import (
-	ts "github.com/sugarme/gotch/tensor"
+	"github.com/sugarme/gotch/ts"
 )
 
 // Encoder is encoder interface for a image segmentation model.

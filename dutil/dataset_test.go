@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jarrahkula/kaggle-hubmap/dutil"
+	"github.com/sugarme/gotch/dutil"
 )
 
 func TestNewSliceDataset(t *testing.T) {

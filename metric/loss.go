@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sugarme/gotch"
-	ts "github.com/sugarme/gotch/tensor"
+	"github.com/sugarme/gotch/ts"
 )
 
 // DiceLoss calculates intersection over union.
@@ -17,18 +17,18 @@ func DiceLoss(pred, target *ts.Tensor) float64 {
 	t := target.MustContiguous(false)
 
 	ptMul := p.MustMul(t, false)
-	intersection := ptMul.MustSum1([]int64{2}, true, gotch.Double, true).MustSum1([]int64{2}, true, gotch.Double, true)
+	intersection := ptMul.MustSumDimIntlist([]int64{2}, true, gotch.Double, true).MustSumDimIntlist([]int64{2}, true, gotch.Double, true)
 
-	pSum := p.MustSum1([]int64{2}, true, gotch.Double, true).MustSum1([]int64{2}, true, gotch.Double, true)
-	tSum := t.MustSum1([]int64{2}, true, gotch.Double, true).MustSum1([]int64{2}, true, gotch.Double, true)
+	pSum := p.MustSumDimIntlist([]int64{2}, true, gotch.Double, true).MustSumDimIntlist([]int64{2}, true, gotch.Double, true)
+	tSum := t.MustSumDimIntlist([]int64{2}, true, gotch.Double, true).MustSumDimIntlist([]int64{2}, true, gotch.Double, true)
 	union := pSum.MustAdd(tSum, true)
 	tSum.MustDrop()
 
-	numerator := intersection.MustMul1(ts.FloatScalar(2.0), true).MustAdd1(ts.FloatScalar(smooth), true)
-	denominator := union.MustAdd1(ts.FloatScalar(smooth), true)
+	numerator := intersection.MustMulScalar(ts.FloatScalar(2.0), true).MustAddScalar(ts.FloatScalar(smooth), true)
+	denominator := union.MustAddScalar(ts.FloatScalar(smooth), true)
 
 	// 1 - (2*intersection + smooth)/(union + smooth)
-	iou := numerator.MustDiv(denominator, true).MustMul1(ts.FloatScalar(-1), true).MustAdd1(ts.FloatScalar(1), true)
+	iou := numerator.MustDiv(denominator, true).MustMulScalar(ts.FloatScalar(-1), true).MustAddScalar(ts.FloatScalar(1), true)
 	denominator.MustDrop()
 
 	retVal := iou.MustMean(gotch.Double, true).Float64Values()[0]
@@ -139,12 +139,12 @@ func JaccardIndex(pred, target *ts.Tensor, nclasses int64) float64 {
 // Ref: https://discuss.pytorch.org/t/understanding-different-metrics-implementations-iou/85817
 func IoU(logits, mask *ts.Tensor) float64 {
 	eps := 1e-6
-	pred := logits.MustSqueeze1(1, false)
-	intersection := pred.MustLogicalAnd(mask, false).MustSum1([]int64{1, 2}, false, gotch.Double, true) // Will be zero if pred = 0 or mask = 0
-	union := pred.MustLogicalOr(mask, true).MustSum1([]int64{1, 2}, false, gotch.Double, true)          // will be zero if both pred = 0 and mask=0
+	pred := logits.MustSqueezeDim(1, false)
+	intersection := pred.MustLogicalAnd(mask, false).MustSumDimIntlist([]int64{1, 2}, false, gotch.Double, true) // Will be zero if pred = 0 or mask = 0
+	union := pred.MustLogicalOr(mask, true).MustSumDimIntlist([]int64{1, 2}, false, gotch.Double, true)          // will be zero if both pred = 0 and mask=0
 
-	numerator := intersection.MustAdd1(ts.FloatScalar(eps), true)
-	denominator := union.MustAdd1(ts.FloatScalar(eps), true)
+	numerator := intersection.MustAddScalar(ts.FloatScalar(eps), true)
+	denominator := union.MustAddScalar(ts.FloatScalar(eps), true)
 
 	iou := numerator.MustDiv(denominator, true)
 	denominator.MustDrop()

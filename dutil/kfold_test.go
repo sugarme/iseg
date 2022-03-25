@@ -3,7 +3,7 @@ package dutil_test
 import (
 	"testing"
 
-	"github.com/jarrahkula/kaggle-hubmap/dutil"
+	"github.com/sugarme/gotch/dutil"
 )
 
 func TestNewKFold(t *testing.T) {

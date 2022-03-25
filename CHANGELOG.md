@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Nofix]
 
+## [0.3.0]
+- Upgrade to gotch 0.7.0 (libtorch 1.11)
+
 ## [0.2.0]
 - Upgrade to use gotch >= v0.4.0 (libtorch 1.9)
 - Removed input normalization in Resnet34 encoder

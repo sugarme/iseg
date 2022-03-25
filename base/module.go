@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/sugarme/gotch/nn"
-	ts "github.com/sugarme/gotch/tensor"
+	"github.com/sugarme/gotch/ts"
 )
 
 // Identity is a nn.Module placeholder.
